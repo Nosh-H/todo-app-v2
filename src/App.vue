@@ -1,12 +1,12 @@
 <script setup>
 import Task from './components/Task.vue'
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 
 // Task structure: [name, description, deadline, priority, completed]
-const defaultTask = () => ['New task', 'New description', null, 'Medium', false]
+const priorityOptions = ['Critical', 'High', 'Medium', 'Low', 'Optional']
+const defaultTask = () => ['', '', '', '', false]
 
-let taskArray = null
-taskArray = JSON.parse(localStorage.getItem('tasks'))
+let taskArray = JSON.parse(localStorage.getItem('tasks'))
 if (taskArray === null) {
   taskArray = [defaultTask()]
 } else {
@@ -26,10 +26,27 @@ function toLocalDate(dateStr) {
   return new Date(parts[0], parts[1] - 1, parts[2])
 }
 
+function isTaskValid(task) {
+  const [name, , deadline, priority] = task
+  return (
+    typeof name === 'string' &&
+    name.trim().length > 0 &&
+    toLocalDate(deadline) !== null &&
+    priorityOptions.includes(priority)
+  )
+}
+
+function getTaskBorderClass(task) {
+  if (!isTaskValid(task)) return 'border-amber-500'
+  return task[4] ? 'border-green-500' : 'border-red-500'
+}
+
 // Number of tasks marked completed / incomplete.
 // These are `computed` so the template updates reactively when `tasks` change.
 const completedCount = computed(() => tasks.value.filter((t) => t[4]).length)
 const incompleteCount = computed(() => tasks.value.length - completedCount.value)
+const invalidTaskCount = computed(() => tasks.value.filter((task) => !isTaskValid(task)).length)
+const canSaveAll = computed(() => invalidTaskCount.value === 0)
 
 // Count tasks whose deadline is today (local date).
 // The `reduce` uses `acc` (accumulator) as the running count of matching tasks;
@@ -105,6 +122,7 @@ function updateTaskDescription(index, newDescription) {
 }
 
 function saveTasks() {
+  if (!canSaveAll.value) return
   localStorage.setItem('tasks', JSON.stringify(tasks.value))
 }
 
@@ -113,7 +131,12 @@ function sortByCompletion() {
 }
 
 function sortByDeadline() {
-  tasks.value.sort((a, b) => new Date(a[2]) - new Date(b[2]))
+  const deadlineTime = (deadline) => {
+    const parsed = toLocalDate(deadline)
+    return parsed ? parsed.getTime() : Number.POSITIVE_INFINITY
+  }
+
+  tasks.value.sort((a, b) => deadlineTime(a[2]) - deadlineTime(b[2]))
 }
 
 function sortAlphabetically() {
@@ -121,8 +144,12 @@ function sortAlphabetically() {
 }
 
 function sortByPriority() {
-  const priorityOrder = ['Critical', 'High', 'Medium', 'Low', 'Optional']
-  tasks.value.sort((a, b) => priorityOrder.indexOf(a[3]) - priorityOrder.indexOf(b[3]))
+  const priorityRank = (priority) => {
+    const rank = priorityOptions.indexOf(priority)
+    return rank === -1 ? priorityOptions.length : rank
+  }
+
+  tasks.value.sort((a, b) => priorityRank(a[3]) - priorityRank(b[3]))
 }
 
 function clearAll() {
@@ -154,7 +181,7 @@ function clearAll() {
 
     <div id="menu" class="toolbar">
       <button @click="addTask">Add new task</button>
-      <button @click="saveTasks">Save All</button>
+      <button @click="saveTasks" :disabled="!canSaveAll">Save All</button>
       <button @click="sortByCompletion">Sort by completion</button>
       <button @click="sortByDeadline">Sort by deadline</button>
       <button @click="sortAlphabetically">Sort alphabetically</button>
@@ -162,10 +189,15 @@ function clearAll() {
       <button @click="clearAll">Clear All</button>
     </div>
 
+    <p v-if="!canSaveAll" class="validation-note" role="status">
+      Fill in the task name, deadline, and priority for every task before saving.
+    </p>
+
     <div id="finished" v-for="(task, index) in tasks" :key="index">
       <tab v-if="task[4]">
         <div
-          class="bg-white shadow-md rounded-lg p-4 m-4 w-full box-border border-2 border-green-500"
+          class="bg-white shadow-md rounded-lg p-4 m-4 w-full box-border border-2"
+          :class="getTaskBorderClass(task)"
         >
           <h3 class="text-green-600 font-bold mb-2">Finished task</h3>
           <Task
@@ -177,17 +209,16 @@ function clearAll() {
 
           <div>
             <label style="display: inline-block">Deadline:</label>
-            <input type="date" v-model="task[2]" />
+            <input type="date" v-model="task[2]" required />
           </div>
 
           <div>
             <label style="display: inline-block">Priority:</label>
-            <select v-model="task[3]">
-              <option value="Critical">Critical</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-              <option value="Optional">Optional</option>
+            <select v-model="task[3]" required>
+              <option disabled value="">Select priority</option>
+              <option v-for="option in priorityOptions" :key="option" :value="option">
+                {{ option }}
+              </option>
             </select>
           </div>
 
@@ -202,7 +233,8 @@ function clearAll() {
       </tab>
       <tab v-else>
         <div
-          class="bg-white shadow-md rounded-lg p-4 m-4 w-full box-border border-2 border-red-500"
+          class="bg-white shadow-md rounded-lg p-4 m-4 w-full box-border border-2"
+          :class="getTaskBorderClass(task)"
         >
           <h3 class="text-red-600 font-bold mb-2">Unfinished task</h3>
           <Task
@@ -214,17 +246,16 @@ function clearAll() {
 
           <div>
             <label style="display: inline-block">Deadline:</label>
-            <input type="date" v-model="task[2]" />
+            <input type="date" v-model="task[2]" required />
           </div>
 
           <div>
             <label style="display: inline-block">Priority:</label>
-            <select v-model="task[3]">
-              <option value="Critical">Critical</option>
-              <option value="High">High</option>
-              <option value="Medium">Medium</option>
-              <option value="Low">Low</option>
-              <option value="Optional">Optional</option>
+            <select v-model="task[3]" required>
+              <option disabled value="">Select priority</option>
+              <option v-for="option in priorityOptions" :key="option" :value="option">
+                {{ option }}
+              </option>
             </select>
           </div>
 
@@ -260,6 +291,19 @@ button {
   margin: 10px 0;
   padding: 10px 15px;
   cursor: pointer;
+}
+
+.toolbar button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+  box-shadow: none;
+}
+
+.validation-note {
+  margin: -12px 0 24px;
+  color: #b45309;
+  font-weight: 600;
 }
 
 #menu {
