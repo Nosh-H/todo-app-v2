@@ -2,19 +2,77 @@
 import Task from './components/Task.vue'
 import { ref, computed } from 'vue'
 
-// Task structure: [name, description, deadline, priority, completed]
 const priorityOptions = ['Critical', 'High', 'Medium', 'Low', 'Optional']
-const defaultTask = () => ['', '', '', '', false]
+function generateTaskId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID()
+  }
 
-let taskArray = JSON.parse(localStorage.getItem('tasks'))
-if (taskArray === null) {
-  taskArray = [defaultTask()]
-} else {
-  // Sort tasks by completion status
-  taskArray.sort((a, b) => b[4] - a[4])
+  return `task-${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
-const tasks = ref(taskArray)
+function createTask(overrides = {}) {
+  const { id, ...rest } = overrides
+
+  return {
+    id: id ?? generateTaskId(),
+    name: '',
+    description: '',
+    deadline: '',
+    priority: '',
+    completed: false,
+    ...rest,
+  }
+}
+
+function normalizeTask(task) {
+  if (Array.isArray(task)) {
+    return createTask({
+      name: task[0] ?? '',
+      description: task[1] ?? '',
+      deadline: task[2] ?? '',
+      priority: task[3] ?? '',
+      completed: Boolean(task[4]),
+    })
+  }
+
+  if (task && typeof task === 'object') {
+    return createTask({
+      id: typeof task.id === 'string' && task.id.trim() ? task.id : undefined,
+      name: typeof task.name === 'string' ? task.name : '',
+      description: typeof task.description === 'string' ? task.description : '',
+      deadline: typeof task.deadline === 'string' ? task.deadline : '',
+      priority: typeof task.priority === 'string' ? task.priority : '',
+      completed: Boolean(task.completed),
+    })
+  }
+
+  return createTask()
+}
+
+function loadTasks() {
+  const rawTasks = localStorage.getItem('tasks')
+
+  if (rawTasks === null) {
+    return [createTask()]
+  }
+
+  try {
+    const parsedTasks = JSON.parse(rawTasks)
+
+    if (!Array.isArray(parsedTasks)) {
+      return [createTask()]
+    }
+
+    const normalizedTasks = parsedTasks.map(normalizeTask)
+    normalizedTasks.sort((a, b) => Number(b.completed) - Number(a.completed))
+    return normalizedTasks
+  } catch {
+    return [createTask()]
+  }
+}
+
+const tasks = ref(loadTasks())
 
 // Helpers to parse YYYY-MM-DD into a local Date at midnight.
 // We parse into a local Date using `new Date(year, month-1, day)` to avoid
@@ -27,23 +85,22 @@ function toLocalDate(dateStr) {
 }
 
 function isTaskValid(task) {
-  const [name, , deadline, priority] = task
   return (
-    typeof name === 'string' &&
-    name.trim().length > 0 &&
-    toLocalDate(deadline) !== null &&
-    priorityOptions.includes(priority)
+    typeof task.name === 'string' &&
+    task.name.trim().length > 0 &&
+    toLocalDate(task.deadline) !== null &&
+    priorityOptions.includes(task.priority)
   )
 }
 
 function getTaskBorderClass(task) {
   if (!isTaskValid(task)) return 'border-amber-500'
-  return task[4] ? 'border-green-500' : 'border-red-500'
+  return task.completed ? 'border-green-500' : 'border-red-500'
 }
 
 // Number of tasks marked completed / incomplete.
 // These are `computed` so the template updates reactively when `tasks` change.
-const completedCount = computed(() => tasks.value.filter((t) => t[4]).length)
+const completedCount = computed(() => tasks.value.filter((t) => t.completed).length)
 const incompleteCount = computed(() => tasks.value.length - completedCount.value)
 const invalidTaskCount = computed(() => tasks.value.filter((task) => !isTaskValid(task)).length)
 const canSaveAll = computed(() => invalidTaskCount.value === 0)
@@ -54,7 +111,7 @@ const canSaveAll = computed(() => invalidTaskCount.value === 0)
 const dueTodayCount = computed(() => {
   const now = new Date()
   return tasks.value.reduce((acc, t) => {
-    const d = toLocalDate(t[2])
+    const d = toLocalDate(t.deadline)
     if (!d) return acc
     if (
       d.getFullYear() === now.getFullYear() &&
@@ -74,7 +131,7 @@ const dueTomorrowCount = computed(() => {
   const now = new Date()
   const tmr = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1)
   return tasks.value.reduce((acc, t) => {
-    const d = toLocalDate(t[2])
+    const d = toLocalDate(t.deadline)
     if (!d) return acc
     if (
       d.getFullYear() === tmr.getFullYear() &&
@@ -97,7 +154,7 @@ const dueNextWeekCount = computed(() => {
   const end = new Date(start)
   end.setDate(start.getDate() + 6) // 7-day window including today
   return tasks.value.reduce((acc, t) => {
-    const d = toLocalDate(t[2])
+    const d = toLocalDate(t.deadline)
     if (!d) return acc
     const dMid = new Date(d.getFullYear(), d.getMonth(), d.getDate())
     if (dMid >= start && dMid <= end) return acc + 1
@@ -106,19 +163,28 @@ const dueNextWeekCount = computed(() => {
 })
 
 function addTask() {
-  tasks.value.push(defaultTask())
+  tasks.value.push(createTask())
 }
 
-function deleteTask(index) {
-  tasks.value.splice(index, 1)
+function deleteTask(taskId) {
+  const taskIndex = tasks.value.findIndex((task) => task.id === taskId)
+  if (taskIndex !== -1) {
+    tasks.value.splice(taskIndex, 1)
+  }
 }
 
-function updateTaskName(index, newName) {
-  tasks.value[index][0] = newName
+function updateTaskName(taskId, newName) {
+  const task = tasks.value.find((entry) => entry.id === taskId)
+  if (task) {
+    task.name = newName
+  }
 }
 
-function updateTaskDescription(index, newDescription) {
-  tasks.value[index][1] = newDescription
+function updateTaskDescription(taskId, newDescription) {
+  const task = tasks.value.find((entry) => entry.id === taskId)
+  if (task) {
+    task.description = newDescription
+  }
 }
 
 function saveTasks() {
@@ -127,7 +193,7 @@ function saveTasks() {
 }
 
 function sortByCompletion() {
-  tasks.value.sort((a, b) => b[4] - a[4])
+  tasks.value.sort((a, b) => Number(b.completed) - Number(a.completed))
 }
 
 function sortByDeadline() {
@@ -136,11 +202,11 @@ function sortByDeadline() {
     return parsed ? parsed.getTime() : Number.POSITIVE_INFINITY
   }
 
-  tasks.value.sort((a, b) => deadlineTime(a[2]) - deadlineTime(b[2]))
+  tasks.value.sort((a, b) => deadlineTime(a.deadline) - deadlineTime(b.deadline))
 }
 
 function sortAlphabetically() {
-  tasks.value.sort((a, b) => a[0].localeCompare(b[0]))
+  tasks.value.sort((a, b) => a.name.localeCompare(b.name))
 }
 
 function sortByPriority() {
@@ -149,13 +215,11 @@ function sortByPriority() {
     return rank === -1 ? priorityOptions.length : rank
   }
 
-  tasks.value.sort((a, b) => priorityRank(a[3]) - priorityRank(b[3]))
+  tasks.value.sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
 }
 
 function clearAll() {
-  for (let i = tasks.value.length - 1; i > -1; i--) {
-    deleteTask(i)
-  }
+  tasks.value = []
 }
 </script>
 
@@ -193,28 +257,28 @@ function clearAll() {
       Fill in the task name, deadline, and priority for every task before saving.
     </p>
 
-    <div id="finished" v-for="(task, index) in tasks" :key="index">
-      <tab v-if="task[4]">
+    <div id="finished" v-for="task in tasks" :key="task.id">
+      <tab v-if="task.completed">
         <div
           class="bg-white shadow-md rounded-lg p-4 m-4 w-full box-border border-2"
           :class="getTaskBorderClass(task)"
         >
           <h3 class="text-green-600 font-bold mb-2">Finished task</h3>
           <Task
-            :taskName="task[0]"
-            @update:taskName="(newName) => updateTaskName(index, newName)"
-            :taskDescription="task[1]"
-            @update:taskDescription="(newDesc) => updateTaskDescription(index, newDesc)"
+            :taskName="task.name"
+            @update:taskName="(newName) => updateTaskName(task.id, newName)"
+            :taskDescription="task.description"
+            @update:taskDescription="(newDesc) => updateTaskDescription(task.id, newDesc)"
           />
 
           <div>
             <label style="display: inline-block">Deadline:</label>
-            <input type="date" v-model="task[2]" required />
+            <input type="date" v-model="task.deadline" required />
           </div>
 
           <div>
             <label style="display: inline-block">Priority:</label>
-            <select v-model="task[3]" required>
+            <select v-model="task.priority" required>
               <option disabled value="">Select priority</option>
               <option v-for="option in priorityOptions" :key="option" :value="option">
                 {{ option }}
@@ -223,12 +287,12 @@ function clearAll() {
           </div>
 
           <div style="display: inline-block">
-            <input type="checkbox" :id="`done-${index}`" v-model="task[4]" />
-            <label :for="`done-${index}`">Mark as Done</label>
+            <input type="checkbox" :id="`done-${task.id}`" v-model="task.completed" />
+            <label :for="`done-${task.id}`">Mark as Done</label>
           </div>
 
           <br />
-          <button @click="deleteTask(index)" class="delete-btn">Delete Task</button>
+          <button @click="deleteTask(task.id)" class="delete-btn">Delete Task</button>
         </div>
       </tab>
       <tab v-else>
@@ -238,20 +302,20 @@ function clearAll() {
         >
           <h3 class="text-red-600 font-bold mb-2">Unfinished task</h3>
           <Task
-            :taskName="task[0]"
-            @update:taskName="(newName) => updateTaskName(index, newName)"
-            :taskDescription="task[1]"
-            @update:taskDescription="(newDesc) => updateTaskDescription(index, newDesc)"
+            :taskName="task.name"
+            @update:taskName="(newName) => updateTaskName(task.id, newName)"
+            :taskDescription="task.description"
+            @update:taskDescription="(newDesc) => updateTaskDescription(task.id, newDesc)"
           />
 
           <div>
             <label style="display: inline-block">Deadline:</label>
-            <input type="date" v-model="task[2]" required />
+            <input type="date" v-model="task.deadline" required />
           </div>
 
           <div>
             <label style="display: inline-block">Priority:</label>
-            <select v-model="task[3]" required>
+            <select v-model="task.priority" required>
               <option disabled value="">Select priority</option>
               <option v-for="option in priorityOptions" :key="option" :value="option">
                 {{ option }}
@@ -260,12 +324,12 @@ function clearAll() {
           </div>
 
           <div style="display: inline-block">
-            <input type="checkbox" :id="`done-${index}`" v-model="task[4]" />
-            <label :for="`done-${index}`">Mark as Done</label>
+            <input type="checkbox" :id="`done-${task.id}`" v-model="task.completed" />
+            <label :for="`done-${task.id}`">Mark as Done</label>
           </div>
 
           <br />
-          <button @click="deleteTask(index)" class="delete-btn">Delete Task</button>
+          <button @click="deleteTask(task.id)" class="delete-btn">Delete Task</button>
         </div>
       </tab>
     </div>
