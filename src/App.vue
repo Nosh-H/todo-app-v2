@@ -3,6 +3,7 @@ import Task from './components/Task.vue'
 import { ref, computed } from 'vue'
 
 const priorityOptions = ['Critical', 'High', 'Medium', 'Low', 'Optional']
+
 function generateTaskId() {
   if (globalThis.crypto?.randomUUID) {
     return globalThis.crypto.randomUUID()
@@ -93,6 +94,7 @@ function isTaskValid(task) {
   )
 }
 
+// Determines styling of task border based on completion status
 function getTaskBorderClass(task) {
   if (!isTaskValid(task)) return 'border-amber-500'
   return task.completed ? 'border-green-500' : 'border-red-500'
@@ -162,6 +164,7 @@ const dueNextWeekCount = computed(() => {
   }, 0)
 })
 
+// Functions for user button tools
 function addTask() {
   tasks.value.push(createTask())
 }
@@ -221,6 +224,33 @@ function sortByPriority() {
 function clearAll() {
   tasks.value = []
 }
+
+// Stores the current filter. 'all' means to show every task.
+const activeFilter = ref('all')
+
+const filterOptions = [
+  { value: 'all', label: 'All' },
+  { value: 'active', label: 'Active' },
+  { value: 'completed', label: 'Completed' },
+]
+
+function isVisibleTask(task) {
+  if (activeFilter.value === 'active') return !task.completed
+  if (activeFilter.value === 'completed') return task.completed
+  return true
+}
+
+const filteredTasks = computed(() => {
+  return tasks.value.filter(isVisibleTask)
+})
+
+function getFilterButtonClass(option) {
+  return option === activeFilter.value ? 'filter-pill filter-pill--active' : 'filter-pill'
+}
+
+function getTaskStatusLabel(task) {
+  return task.completed ? 'Finished task' : 'Unfinished task'
+}
 </script>
 
 <template>
@@ -253,85 +283,71 @@ function clearAll() {
       <button @click="clearAll">Clear All</button>
     </div>
 
+    <section class="filter-bar" aria-label="Task filters">
+      <p class="app-eyebrow">Filter</p>
+      <div class="filter-group">
+        <button
+          v-for="option in filterOptions"
+          :key="option.value"
+          type="button"
+          :class="getFilterButtonClass(option.value)"
+          :aria-pressed="activeFilter === option.value"
+          @click="activeFilter = option.value"
+        >
+          {{ option.label }}
+        </button>
+      </div>
+    </section>
+
     <p v-if="!canSaveAll" class="validation-note" role="status">
       Fill in the task name, deadline, and priority for every task before saving.
     </p>
 
-    <div id="finished" v-for="task in tasks" :key="task.id">
-      <tab v-if="task.completed">
-        <div
-          class="bg-white shadow-md rounded-lg p-4 m-4 w-full box-border border-2"
-          :class="getTaskBorderClass(task)"
-        >
-          <h3 class="text-green-600 font-bold mb-2">Finished task</h3>
-          <Task
-            :taskName="task.name"
-            @update:taskName="(newName) => updateTaskName(task.id, newName)"
-            :taskDescription="task.description"
-            @update:taskDescription="(newDesc) => updateTaskDescription(task.id, newDesc)"
-          />
+    <div v-if="filteredTasks.length === 0" class="summary">
+      <p class="bullet">No tasks match this filter.</p>
+    </div>
 
-          <div>
-            <label style="display: inline-block">Deadline:</label>
-            <input type="date" v-model="task.deadline" required />
-          </div>
+    <div v-else class="task-list">
+      <div
+        v-for="task in filteredTasks"
+        :key="task.id"
+        class="task-card bg-white shadow-md rounded-lg p-4 w-full box-border border-2"
+        :class="getTaskBorderClass(task)"
+      >
+        <h3 :class="task.completed ? 'text-green-600' : 'text-red-600'" class="font-bold mb-2">
+          {{ getTaskStatusLabel(task) }}
+        </h3>
 
-          <div>
-            <label style="display: inline-block">Priority:</label>
-            <select v-model="task.priority" required>
-              <option disabled value="">Select priority</option>
-              <option v-for="option in priorityOptions" :key="option" :value="option">
-                {{ option }}
-              </option>
-            </select>
-          </div>
+        <Task
+          :taskName="task.name"
+          @update:taskName="(newName) => updateTaskName(task.id, newName)"
+          :taskDescription="task.description"
+          @update:taskDescription="(newDesc) => updateTaskDescription(task.id, newDesc)"
+        />
 
-          <div style="display: inline-block">
-            <input type="checkbox" :id="`done-${task.id}`" v-model="task.completed" />
-            <label :for="`done-${task.id}`">Mark as Done</label>
-          </div>
-
-          <br />
-          <button @click="deleteTask(task.id)" class="delete-btn">Delete Task</button>
+        <div>
+          <label style="display: inline-block">Deadline:</label>
+          <input type="date" v-model="task.deadline" required />
         </div>
-      </tab>
-      <tab v-else>
-        <div
-          class="bg-white shadow-md rounded-lg p-4 m-4 w-full box-border border-2"
-          :class="getTaskBorderClass(task)"
-        >
-          <h3 class="text-red-600 font-bold mb-2">Unfinished task</h3>
-          <Task
-            :taskName="task.name"
-            @update:taskName="(newName) => updateTaskName(task.id, newName)"
-            :taskDescription="task.description"
-            @update:taskDescription="(newDesc) => updateTaskDescription(task.id, newDesc)"
-          />
 
-          <div>
-            <label style="display: inline-block">Deadline:</label>
-            <input type="date" v-model="task.deadline" required />
-          </div>
-
-          <div>
-            <label style="display: inline-block">Priority:</label>
-            <select v-model="task.priority" required>
-              <option disabled value="">Select priority</option>
-              <option v-for="option in priorityOptions" :key="option" :value="option">
-                {{ option }}
-              </option>
-            </select>
-          </div>
-
-          <div style="display: inline-block">
-            <input type="checkbox" :id="`done-${task.id}`" v-model="task.completed" />
-            <label :for="`done-${task.id}`">Mark as Done</label>
-          </div>
-
-          <br />
-          <button @click="deleteTask(task.id)" class="delete-btn">Delete Task</button>
+        <div>
+          <label style="display: inline-block">Priority:</label>
+          <select v-model="task.priority" required>
+            <option disabled value="">Select priority</option>
+            <option v-for="option in priorityOptions" :key="option" :value="option">
+              {{ option }}
+            </option>
+          </select>
         </div>
-      </tab>
+
+        <div style="display: inline-block">
+          <input type="checkbox" :id="`done-${task.id}`" v-model="task.completed" />
+          <label :for="`done-${task.id}`">Mark as Done</label>
+        </div>
+
+        <br />
+        <button @click="deleteTask(task.id)" class="delete-btn">Delete Task</button>
+      </div>
     </div>
   </main>
 </template>
@@ -370,21 +386,4 @@ button {
   font-weight: 600;
 }
 
-#menu {
-  display: flex;
-  justify-content: flex-start;
-  gap: 20px;
-  width: 100%;
-  flex-wrap: wrap;
-}
-
-/* Finished / unfinished heading colors are handled with Tailwind classes now. */
-
-#finished {
-  display: inline-block;
-}
-
-#unfinished {
-  display: inline-block;
-}
 </style>

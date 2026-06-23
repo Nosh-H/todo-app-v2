@@ -108,6 +108,50 @@ body {
   outline-offset: 2px;
 }
 
+.filter-bar {
+  margin: 0 0 24px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.68);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+}
+
+.filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.filter-pill {
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: #ffffff;
+  color: #334155;
+  border-radius: 9999px;
+  padding: 8px 14px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.filter-pill:hover {
+  background: #f8fafc;
+}
+
+.filter-pill--active {
+  background: #0f172a;
+  color: #ffffff;
+  border-color: #0f172a;
+}
+
+.task-list {
+  display: grid;
+  gap: 16px;
+}
+
+.task-card {
+  margin: 0;
+}
+
 @media (max-width: 640px) {
   #app {
     padding: 20px 12px 32px;
@@ -119,5 +163,10 @@ body {
 
   .app-description {
     font-size: 1rem;
+  }
+
+  .toolbar,
+  .filter-bar {
+    padding: 14px;
   }
 }
