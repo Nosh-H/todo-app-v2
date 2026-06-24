@@ -3,6 +3,12 @@ import TaskCard from './components/TaskCard.vue'
 import { ref, computed } from 'vue'
 
 const priorityOptions = ['Critical', 'High', 'Medium', 'Low', 'Optional']
+const sortOptions = [
+  { value: 'completion', label: 'Completion' },
+  { value: 'deadline', label: 'Deadline' },
+  { value: 'alphabetical', label: 'Alphabetical' },
+  { value: 'priority', label: 'Priority' },
+]
 
 function generateTaskId() {
   if (globalThis.crypto?.randomUUID) {
@@ -236,6 +242,26 @@ function sortByPriority() {
   tasks.value.sort((a, b) => priorityRank(a.priority) - priorityRank(b.priority))
 }
 
+const selectedSort = ref('')
+
+function handleSortChange() {
+  if (selectedSort.value === 'completion') {
+    sortByCompletion()
+  } else if (selectedSort.value === 'deadline') {
+    sortByDeadline()
+  } else if (selectedSort.value === 'alphabetical') {
+    sortAlphabetically()
+  } else if (selectedSort.value === 'priority') {
+    sortByPriority()
+  }
+}
+
+const selectedFilter = ref('all')
+
+function handleFilterChange() {
+  activeFilter.value = selectedFilter.value
+}
+
 function clearAll() {
   tasks.value = []
 }
@@ -259,9 +285,6 @@ const filteredTasks = computed(() => {
   return tasks.value.filter(isVisibleTask)
 })
 
-function getFilterButtonClass(option) {
-  return option === activeFilter.value ? 'filter-pill filter-pill--active' : 'filter-pill'
-}
 </script>
 
 <template>
@@ -276,7 +299,7 @@ function getFilterButtonClass(option) {
     </header>
 
     <div id="summary" class="summary">
-      <p class="app-eyebrow" id="top-title">Summary</p>
+      <p class="app-eyebrow" id="summary-title">Summary</p>
       <p class="bullet">Completed: {{ completedCount }}</p>
       <p class="bullet">Not finished yet: {{ incompleteCount }}</p>
       <p class="bullet">Due today: {{ dueTodayCount }}</p>
@@ -285,30 +308,31 @@ function getFilterButtonClass(option) {
     </div>
 
     <div id="menu" class="toolbar">
-      <button @click="addTask">Add new task</button>
-      <button @click="saveTasks" :disabled="!canSaveAll">Save All</button>
-      <button @click="sortByCompletion">Sort by completion</button>
-      <button @click="sortByDeadline">Sort by deadline</button>
-      <button @click="sortAlphabetically">Sort alphabetically</button>
-      <button @click="sortByPriority">Sort by priority</button>
-      <button @click="clearAll">Clear All</button>
-    </div>
+      <button class="pill" @click="addTask">Add new task</button>
 
-    <section class="filter-bar" aria-label="Task filters">
-      <p class="app-eyebrow">Filter</p>
-      <div class="filter-group">
-        <button
-          v-for="option in filterOptions"
-          :key="option.value"
-          type="button"
-          :class="getFilterButtonClass(option.value)"
-          :aria-pressed="activeFilter === option.value"
-          @click="activeFilter = option.value"
-        >
-          {{ option.label }}
-        </button>
-      </div>
-    </section>
+      <label class="sort-control">
+        <span class="sort-control__label">Sort by</span>
+        <select v-model="selectedSort" class="sort-select" @change="handleSortChange">
+          <option value="" disabled>Choose a sort</option>
+          <option v-for="option in sortOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <label class="sort-control">
+        <span class="sort-control__label">Filter by</span>
+        <select v-model="selectedFilter" class="sort-select" @change="handleFilterChange">
+          <option value="" disabled>Choose a filter</option>
+          <option v-for="option in filterOptions" :key="option.value" :value="option.value">
+            {{ option.label }}
+          </option>
+        </select>
+      </label>
+
+      <button class="pill" @click="saveTasks" :disabled="!canSaveAll">Save All</button>
+      <button class="pill" @click="clearAll">Clear All</button>
+    </div>
 
     <p v-if="!canSaveAll" class="validation-note" role="status">
       Fill in the task name, deadline, and priority for every task before saving.
