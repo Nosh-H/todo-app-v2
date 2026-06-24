@@ -1,7 +1,7 @@
 <script setup>
 import TaskCard from './components/TaskCard.vue'
 import { ref, computed } from 'vue'
-import { useDarkMode } from '@/composables/useDarkMode';
+import { useDarkMode } from '@/composables/useDarkMode'
 
 const priorityOptions = ['Critical', 'High', 'Medium', 'Low', 'Optional']
 const sortOptions = [
@@ -287,8 +287,93 @@ const filteredTasks = computed(() => {
 })
 
 // Dark mode
-const { isDark, toggleDark } = useDarkMode();
+const { isDark, toggleDark } = useDarkMode()
+const fileInput = ref(null)
 
+function triggerFileSelect() {
+  if (fileInput.value) fileInput.value.click()
+}
+
+// Function to let user download task data as a JSON file
+function saveFile() {
+  // Convert data into JSON
+  const data = JSON.stringify(tasks.value)
+
+  // Save to file using Blob - https://stackoverflow.com/questions/48611671/vue-js-write-json-object-to-local-file
+  const blob = new Blob([data], { type: 'text/plain' })
+  const e = document.createEvent('MouseEvents'),
+    a = document.createElement('a')
+  a.download = 'test.json'
+  a.href = window.URL.createObjectURL(blob)
+  a.dataset.downloadurl = ['text/json', a.download, a.href].join(':')
+  e.initEvent('click', true, false, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null)
+  a.dispatchEvent(e)
+}
+
+// Function to let user upload task(s) from a JSON file
+function uploadTasks() {
+  // Accept the FileList from the event (or from the `fileInput` ref).
+  // The previous implementation treated `event.target.files[0]` as a FileList
+  // and then inspected `.length` on it which is incorrect. Here we use
+  // `event.target.files` (a FileList) and guard for its existence.
+  const fileList = event?.target?.files ?? fileInput.value?.files
+  if (!fileList || fileList.length === 0) return false
+
+  // Grab the first selected file. This is a File object and must be
+  // read asynchronously with a FileReader. A key bug before was trying
+  // to read `fr.result` synchronously immediately after calling
+  // `readAsText` — `FileReader` works via events/callbacks.
+  const file = fileList[0]
+  const fr = new FileReader()
+
+  // `onload` fires once the file has been read. Do all parsing and
+  // normalization inside this handler to ensure the data is available.
+  fr.onload = (e) => {
+    try {
+      // Parse the uploaded file text as JSON. This can be either:
+      //  - an array of tasks: [{...}, {...}]
+      //  - a single task object: {...}
+      //  - an envelope object with a `tasks` array: { tasks: [...] }
+      // The previous code attempted to parse `fr.result` outside the
+      // `onload` handler which meant `fr.result` was not yet set.
+      const raw = JSON.parse(e.target.result)
+
+      // Normalize the incoming shape into an array of task-like values
+      // so the rest of the app can handle them uniformly.
+      let parsedTasks
+      if (Array.isArray(raw)) {
+        parsedTasks = raw
+      } else if (raw && typeof raw === 'object') {
+        // Accept both `{ tasks: [...] }` and a single-task object
+        if (Array.isArray(raw.tasks)) parsedTasks = raw.tasks
+        else parsedTasks = [raw]
+      } else {
+        // Give a clear message to the user if the JSON is not usable.
+        document.getElementById('result').innerText = 'Uploaded JSON is not an array or object.'
+        return
+      }
+
+      // Convert each incoming item to the app's canonical task shape
+      // using `normalizeTask`, then sort and append to the existing list.
+      // Note: the original code used `foreach` (misspelled) which failed
+      // silently; we use the correct `forEach` here.
+      const normalizedTasks = parsedTasks.map(normalizeTask)
+      normalizedTasks.sort((a, b) => Number(b.completed) - Number(a.completed))
+      normalizedTasks.forEach((task) => {
+        tasks.value.push(task)
+      })
+
+      // Show the normalized tasks to the user for confirmation.
+      document.getElementById('result').innerText = "Upload good."
+    } catch (err) {
+      // Surface parsing errors to the user so they can correct the file.
+      document.getElementById('result').innerText = `Error parsing JSON: ${err?.message ?? err}`
+    }
+  }
+
+  // Kick off the asynchronous read. All work continues in `onload`.
+  fr.readAsText(file)
+}
 </script>
 
 <template>
@@ -313,6 +398,16 @@ const { isDark, toggleDark } = useDarkMode();
 
     <div id="menu" class="toolbar">
       <button class="pill" @click="addTask">Add new task</button>
+      <button class="pill" @click="triggerFileSelect" id="import">Import JSON:
+        <input
+          type="file"
+          id="selectfiles"
+          @change="uploadTasks"
+          ref="fileInput"
+          name="Add from JSON"
+        >
+      </button>
+      <pre id="result"></pre>
 
       <label class="sort-control">
         <span class="sort-control__label">Sort by</span>
@@ -336,11 +431,12 @@ const { isDark, toggleDark } = useDarkMode();
 
       <button class="pill" @click="saveTasks" :disabled="!canSaveAll">Save All</button>
       <button class="pill" @click="clearAll">Clear All</button>
+      <button class="pill" @click="saveFile">Download</button>
 
       <!--Dark Mode-->
       <div class="mt-3 flex items-center gap-2 pill">
-        <label :for="dark-mode">Dark Mode?</label>
-        <input :id="dark-mode" @click="toggleDark" type="checkbox" />
+        <label :for="dark - mode">Dark Mode?</label>
+        <input :id="dark - mode" @click="toggleDark" type="checkbox" />
       </div>
     </div>
 
