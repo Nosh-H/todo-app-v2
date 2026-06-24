@@ -1,6 +1,7 @@
 <script setup>
 import TaskCard from './components/TaskCard.vue'
 import { ref, computed } from 'vue'
+import { useDarkMode } from '@/composables/useDarkMode';
 
 const priorityOptions = ['Critical', 'High', 'Medium', 'Low', 'Optional']
 const sortOptions = [
@@ -285,6 +286,9 @@ const filteredTasks = computed(() => {
   return tasks.value.filter(isVisibleTask)
 })
 
+// Dark mode
+const { isDark, toggleDark } = useDarkMode();
+
 </script>
 
 <template>
@@ -332,6 +336,12 @@ const filteredTasks = computed(() => {
 
       <button class="pill" @click="saveTasks" :disabled="!canSaveAll">Save All</button>
       <button class="pill" @click="clearAll">Clear All</button>
+
+      <!--Dark Mode-->
+      <div class="mt-3 flex items-center gap-2 pill">
+        <label :for="dark-mode">Dark Mode?</label>
+        <input :id="dark-mode" @click="toggleDark" type="checkbox" />
+      </div>
     </div>
 
     <p v-if="!canSaveAll" class="validation-note" role="status">
