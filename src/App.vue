@@ -1,5 +1,5 @@
 <script setup>
-import Task from './components/Task.vue'
+import TaskCard from './components/TaskCard.vue'
 import { ref, computed } from 'vue'
 
 const priorityOptions = ['Critical', 'High', 'Medium', 'Low', 'Optional']
@@ -94,12 +94,6 @@ function isTaskValid(task) {
   )
 }
 
-// Determines styling of task border based on completion status
-function getTaskBorderClass(task) {
-  if (!isTaskValid(task)) return 'border-amber-500'
-  return task.completed ? 'border-green-500' : 'border-red-500'
-}
-
 // Number of tasks marked completed / incomplete.
 // These are `computed` so the template updates reactively when `tasks` change.
 const completedCount = computed(() => tasks.value.filter((t) => t.completed).length)
@@ -190,6 +184,27 @@ function updateTaskDescription(taskId, newDescription) {
   }
 }
 
+function updateTaskDeadline(taskId, newDeadline) {
+  const task = tasks.value.find((entry) => entry.id === taskId)
+  if (task) {
+    task.deadline = newDeadline
+  }
+}
+
+function updateTaskPriority(taskId, newPriority) {
+  const task = tasks.value.find((entry) => entry.id === taskId)
+  if (task) {
+    task.priority = newPriority
+  }
+}
+
+function updateTaskCompleted(taskId, isCompleted) {
+  const task = tasks.value.find((entry) => entry.id === taskId)
+  if (task) {
+    task.completed = isCompleted
+  }
+}
+
 function saveTasks() {
   if (!canSaveAll.value) return
   localStorage.setItem('tasks', JSON.stringify(tasks.value))
@@ -247,16 +262,12 @@ const filteredTasks = computed(() => {
 function getFilterButtonClass(option) {
   return option === activeFilter.value ? 'filter-pill filter-pill--active' : 'filter-pill'
 }
-
-function getTaskStatusLabel(task) {
-  return task.completed ? 'Finished task' : 'Unfinished task'
-}
 </script>
 
 <template>
   <main class="app-shell">
     <header class="app-header">
-      <p class="app-eyebrow">Task manager</p>
+      <p class="app-eyebrow" id="top-title">Task manager</p>
       <h1 class="app-title">Plan, prioritize, and finish your day with less friction</h1>
       <p class="app-description">
         Create tasks, add deadlines and priority levels, then sort everything to match how you want
@@ -265,7 +276,7 @@ function getTaskStatusLabel(task) {
     </header>
 
     <div id="summary" class="summary">
-      <p class="app-eyebrow">Summary</p>
+      <p class="app-eyebrow" id="top-title">Summary</p>
       <p class="bullet">Completed: {{ completedCount }}</p>
       <p class="bullet">Not finished yet: {{ incompleteCount }}</p>
       <p class="bullet">Due today: {{ dueTodayCount }}</p>
@@ -308,71 +319,23 @@ function getTaskStatusLabel(task) {
     </div>
 
     <div v-else class="task-list">
-      <div
+      <TaskCard
         v-for="task in filteredTasks"
         :key="task.id"
-        class="task-card bg-white shadow-md rounded-lg p-4 w-full box-border border-2"
-        :class="getTaskBorderClass(task)"
-      >
-        <h3 :class="task.completed ? 'text-green-600' : 'text-red-600'" class="font-bold mb-2">
-          {{ getTaskStatusLabel(task) }}
-        </h3>
-
-        <Task
-          :taskName="task.name"
-          @update:taskName="(newName) => updateTaskName(task.id, newName)"
-          :taskDescription="task.description"
-          @update:taskDescription="(newDesc) => updateTaskDescription(task.id, newDesc)"
-        />
-
-        <div>
-          <label style="display: inline-block">Deadline:</label>
-          <input type="date" v-model="task.deadline" required />
-        </div>
-
-        <div>
-          <label style="display: inline-block">Priority:</label>
-          <select v-model="task.priority" required>
-            <option disabled value="">Select priority</option>
-            <option v-for="option in priorityOptions" :key="option" :value="option">
-              {{ option }}
-            </option>
-          </select>
-        </div>
-
-        <div style="display: inline-block">
-          <input type="checkbox" :id="`done-${task.id}`" v-model="task.completed" />
-          <label :for="`done-${task.id}`">Mark as Done</label>
-        </div>
-
-        <br />
-        <button @click="deleteTask(task.id)" class="delete-btn">Delete Task</button>
-      </div>
+        :task="task"
+        :priority-options="priorityOptions"
+        @update:taskName="(newName) => updateTaskName(task.id, newName)"
+        @update:taskDescription="(newDesc) => updateTaskDescription(task.id, newDesc)"
+        @update:deadline="(newDeadline) => updateTaskDeadline(task.id, newDeadline)"
+        @update:priority="(newPriority) => updateTaskPriority(task.id, newPriority)"
+        @update:completed="(isCompleted) => updateTaskCompleted(task.id, isCompleted)"
+        @delete="deleteTask(task.id)"
+      />
     </div>
   </main>
 </template>
 
 <style scoped>
-input {
-  display: block;
-  margin: 5px 0;
-}
-
-.delete-btn {
-  background-color: #ff4444;
-  color: white;
-  border: none;
-  padding: 5px 10px;
-  cursor: pointer;
-  margin-top: 10px;
-}
-
-button {
-  margin: 10px 0;
-  padding: 10px 15px;
-  cursor: pointer;
-}
-
 .toolbar button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
@@ -385,5 +348,4 @@ button {
   color: #b45309;
   font-weight: 600;
 }
-
 </style>
